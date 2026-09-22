@@ -7,6 +7,12 @@ use Filament\Support\Contracts\HasLabel;
 
 enum DocumentStatus: string implements HasColor, HasLabel
 {
+    /**
+     * Pre-workflow: saved by its creator, not yet entered into routing.
+     * Never has a current_office_id, so it's invisible to everyone but its
+     * creator (and super_admin) until Submit moves it to Registered.
+     */
+    case Draft = 'draft';
     case Registered = 'registered';
     case InRouting = 'in_routing';
     case ForApproval = 'for_approval';
@@ -16,6 +22,7 @@ enum DocumentStatus: string implements HasColor, HasLabel
     public function getLabel(): string
     {
         return match ($this) {
+            self::Draft => 'Draft',
             self::Registered => 'Registered',
             self::InRouting => 'In Routing',
             self::ForApproval => 'For Approval',
@@ -27,6 +34,7 @@ enum DocumentStatus: string implements HasColor, HasLabel
     public function getColor(): string
     {
         return match ($this) {
+            self::Draft => 'gray',
             self::Registered => 'gray',
             self::InRouting => 'info',
             self::ForApproval => 'warning',

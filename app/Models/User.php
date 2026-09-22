@@ -20,7 +20,7 @@ class User extends Authenticatable implements FilamentUser
     /**
      * @var list<string>
      */
-    protected $fillable = ['name', 'email', 'password', 'office_id'];
+    protected $fillable = ['name', 'email', 'password', 'institution_id', 'office_id'];
 
     /**
      * @var list<string>
@@ -48,6 +48,11 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->roles()->exists();
+    }
+
+    public function institution(): BelongsTo
+    {
+        return $this->belongsTo(Institution::class);
     }
 
     public function office(): BelongsTo

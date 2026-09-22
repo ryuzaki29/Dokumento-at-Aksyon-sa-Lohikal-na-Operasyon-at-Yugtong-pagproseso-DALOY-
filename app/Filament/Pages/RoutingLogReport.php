@@ -36,6 +36,8 @@ class RoutingLogReport extends Page implements HasTable
 
     protected static ?string $navigationLabel = 'Routing Log Report';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Audit Trail';
+
     public function table(Table $table): Table
     {
         return $table

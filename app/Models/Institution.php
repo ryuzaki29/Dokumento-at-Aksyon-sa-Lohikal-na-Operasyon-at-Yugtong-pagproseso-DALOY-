@@ -3,16 +3,15 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasAuditColumns;
-use Database\Factories\OfficeFactory;
+use Database\Factories\InstitutionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Office extends Model
+class Institution extends Model
 {
-    /** @use HasFactory<OfficeFactory> */
+    /** @use HasFactory<InstitutionFactory> */
     use HasAuditColumns, HasFactory, SoftDeletes;
 
     /**
@@ -22,7 +21,7 @@ class Office extends Model
      *
      * @var list<string>
      */
-    protected $fillable = ['institution_id', 'code', 'name', 'is_active'];
+    protected $fillable = ['code', 'name', 'is_active'];
 
     protected function casts(): array
     {
@@ -31,23 +30,13 @@ class Office extends Model
         ];
     }
 
-    public function institution(): BelongsTo
+    public function offices(): HasMany
     {
-        return $this->belongsTo(Institution::class);
+        return $this->hasMany(Office::class);
     }
 
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
-    }
-
-    public function documentsOriginating(): HasMany
-    {
-        return $this->hasMany(Document::class, 'originating_office_id');
-    }
-
-    public function documentsCurrent(): HasMany
-    {
-        return $this->hasMany(Document::class, 'current_office_id');
     }
 }

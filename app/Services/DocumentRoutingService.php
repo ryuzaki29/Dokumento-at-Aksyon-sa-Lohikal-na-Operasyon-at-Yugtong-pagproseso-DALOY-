@@ -21,6 +21,32 @@ use Illuminate\Validation\ValidationException;
  */
 class DocumentRoutingService
 {
+    /**
+     * Draft -> Registered: the only transition that isn't logged as a
+     * RouteAction, matching how the very first Registered state (created
+     * directly, not via a draft) was never logged either — routing history
+     * only starts once a document is actually received somewhere.
+     */
+    public static function submit(Document $record, User $actor): Document
+    {
+        return DB::transaction(function () use ($record, $actor) {
+            $document = static::lockOrFail($record, DocumentStatus::Draft, $actor, requireOfficeMatch: false);
+
+            if ($document->created_by !== $actor->id) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only the document\'s creator can submit it.',
+                ]);
+            }
+
+            $document->update([
+                'status' => DocumentStatus::Registered,
+                'current_office_id' => $document->originating_office_id,
+            ]);
+
+            return $document;
+        });
+    }
+
     public static function receive(Document $record, User $actor, ?string $remarks = null): Document
     {
         return DB::transaction(function () use ($record, $actor, $remarks) {

@@ -27,7 +27,7 @@ class Document extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'document_type_id', 'subject', 'originating_office_id', 'file_path', 'status', 'current_office_id',
+        'document_type_id', 'subject', 'description', 'originating_office_id', 'file_path', 'status', 'current_office_id',
     ];
 
     protected function casts(): array

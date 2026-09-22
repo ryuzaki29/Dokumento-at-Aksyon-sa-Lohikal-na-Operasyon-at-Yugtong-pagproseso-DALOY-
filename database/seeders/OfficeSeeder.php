@@ -34,8 +34,15 @@ class OfficeSeeder extends Seeder
             );
         }
 
-        // Processing Staff works out of Records Section; Approver sits in
-        // the Legal / Approving Office — matches DemoUserSeeder's accounts.
+        // Document Originator and Processing Staff both work out of Records
+        // Section — matches DocumentDemoSeeder, where every demo document
+        // originates from REC and Staff's first action is "received" there
+        // (no forwarding needed to receive it). Approver sits in the Legal /
+        // Approving Office. Every document-creating role needs an office_id:
+        // Document creation now locks originating_office_id to the
+        // registering user's own office rather than letting them pick any
+        // office freely.
+        User::where('email', 'originator@example.com')->update(['office_id' => $offices['REC']->id]);
         User::where('email', 'staff@example.com')->update(['office_id' => $offices['REC']->id]);
         User::where('email', 'approver@example.com')->update(['office_id' => $offices['LEG']->id]);
     }

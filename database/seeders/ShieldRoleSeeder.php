@@ -31,6 +31,7 @@ class ShieldRoleSeeder extends Seeder
             'Resubmit:Document',
             'ViewAny:DocumentType', 'View:DocumentType',
             'ViewAny:Office', 'View:Office',
+            'ViewAny:Institution', 'View:Institution',
             'View:DocumentStatsOverview', 'View:RoutingLogReport',
         ],
         'processing_staff' => [
@@ -38,6 +39,7 @@ class ShieldRoleSeeder extends Seeder
             'Receive:Document', 'Forward:Document', 'SubmitForApproval:Document', 'Return:Document',
             'ViewAny:DocumentType', 'View:DocumentType',
             'ViewAny:Office', 'View:Office',
+            'ViewAny:Institution', 'View:Institution',
             'View:DocumentStatsOverview', 'View:RoutingLogReport',
         ],
         'approver' => [
@@ -45,6 +47,7 @@ class ShieldRoleSeeder extends Seeder
             'Approve:Document', 'Return:Document',
             'ViewAny:DocumentType', 'View:DocumentType',
             'ViewAny:Office', 'View:Office',
+            'ViewAny:Institution', 'View:Institution',
             'View:DocumentStatsOverview', 'View:RoutingLogReport',
         ],
     ];

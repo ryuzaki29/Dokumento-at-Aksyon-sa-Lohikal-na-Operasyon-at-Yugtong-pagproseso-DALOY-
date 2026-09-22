@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Offices\Tables;
+namespace App\Filament\Resources\Institutions\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -10,21 +10,15 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-class OfficesTable
+class InstitutionsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('institution.name')
-                    ->label('Institution')
-                    ->searchable()
-                    ->sortable()
-                    ->placeholder('—'),
                 TextColumn::make('code')
                     ->searchable()
                     ->sortable(),
@@ -40,11 +34,6 @@ class OfficesTable
             ])
             ->defaultSort('name')
             ->filters([
-                SelectFilter::make('institution_id')
-                    ->label('Institution')
-                    ->relationship('institution', 'name')
-                    ->searchable()
-                    ->preload(),
                 TrashedFilter::make(),
             ])
             ->recordActions([

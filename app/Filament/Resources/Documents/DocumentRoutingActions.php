@@ -16,9 +16,38 @@ use Filament\Notifications\Notification;
  * routing transitions. All the transactional business logic — and the
  * enforcement of the "one current active holder" rule — lives in
  * DocumentRoutingService, so it can be exercised directly in tests.
+ *
+ * Every action calls $record->refresh() right after its service call.
+ * DocumentRoutingService re-fetches and locks its own copy of the row
+ * (Document::query()->lockForUpdate()->findOrFail(...)) rather than mutating
+ * $record directly, so without this, $record — which on a resource page is
+ * the exact same instance as $this->record — keeps showing the pre-action
+ * status for the rest of that page's lifetime. Each action's own visible()
+ * closure reads $record->status, so a stale $record meant the button you
+ * just used (and every other status-gated action) kept showing afterward,
+ * instead of the page updating to reflect the new status.
  */
 class DocumentRoutingActions
 {
+    public static function submit(): Action
+    {
+        return Action::make('submit')
+            ->label('Submit')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('primary')
+            ->requiresConfirmation()
+            ->modalDescription('This registers the document and makes it visible for routing. You will no longer be able to freely edit its type, subject, or description.')
+            ->visible(fn (Document $record): bool => $record->status === DocumentStatus::Draft
+                && $record->created_by === auth()->id()
+                && auth()->user()->can('Create:Document'))
+            ->action(function (Document $record): void {
+                DocumentRoutingService::submit($record, auth()->user());
+                $record->refresh();
+
+                Notification::make()->title('Document submitted')->success()->send();
+            });
+    }
+
     public static function receive(): Action
     {
         return Action::make('receive')
@@ -33,6 +62,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::receive($record, auth()->user(), $data['remarks'] ?? null);
+                $record->refresh();
 
                 Notification::make()->title('Document received')->success()->send();
             });
@@ -60,6 +90,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::forward($record, auth()->user(), (int) $data['to_office_id'], $data['remarks'] ?? null);
+                $record->refresh();
 
                 Notification::make()->title('Document forwarded')->success()->send();
             });
@@ -87,6 +118,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::submitForApproval($record, auth()->user(), (int) $data['to_office_id'], $data['remarks'] ?? null);
+                $record->refresh();
 
                 Notification::make()->title('Document submitted for approval')->success()->send();
             });
@@ -107,6 +139,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::approve($record, auth()->user(), $data['remarks'] ?? null);
+                $record->refresh();
 
                 Notification::make()->title('Document approved and completed')->success()->send();
             });
@@ -130,6 +163,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::return($record, auth()->user(), $data['remarks']);
+                $record->refresh();
 
                 Notification::make()->title('Document returned to originator')->warning()->send();
             });
@@ -149,6 +183,7 @@ class DocumentRoutingActions
             ])
             ->action(function (Document $record, array $data): void {
                 DocumentRoutingService::resubmit($record, auth()->user(), $data['remarks'] ?? null);
+                $record->refresh();
 
                 Notification::make()->title('Document resubmitted')->success()->send();
             });

@@ -37,6 +37,11 @@ class DocumentsTable
                 TextColumn::make('subject')
                     ->searchable()
                     ->limit(40),
+                TextColumn::make('description')
+                    ->searchable()
+                    ->limit(40)
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—'),
                 TextColumn::make('status')
                     ->badge()
                     ->sortable(),
@@ -78,6 +83,7 @@ class DocumentsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                DocumentRoutingActions::submit(),
                 DocumentRoutingActions::receive(),
                 DocumentRoutingActions::forward(),
                 DocumentRoutingActions::submitForApproval(),

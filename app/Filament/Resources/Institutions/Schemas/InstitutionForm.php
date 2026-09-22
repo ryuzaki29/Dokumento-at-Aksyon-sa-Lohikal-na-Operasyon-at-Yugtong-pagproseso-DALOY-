@@ -1,23 +1,17 @@
 <?php
 
-namespace App\Filament\Resources\Offices\Schemas;
+namespace App\Filament\Resources\Institutions\Schemas;
 
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
-class OfficeForm
+class InstitutionForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Select::make('institution_id')
-                    ->label('Institution')
-                    ->relationship('institution', 'name')
-                    ->searchable()
-                    ->preload(),
                 TextInput::make('code')
                     ->required()
                     ->maxLength(50)
