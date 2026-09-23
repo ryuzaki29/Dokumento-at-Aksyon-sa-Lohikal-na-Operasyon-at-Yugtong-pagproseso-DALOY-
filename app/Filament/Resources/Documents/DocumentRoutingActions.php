@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Documents;
 use App\Enums\DocumentStatus;
 use App\Models\Document;
 use App\Models\Office;
-use App\Models\Route;
 use App\Services\DocumentRoutingService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -78,12 +77,17 @@ class DocumentRoutingActions
             ->visible(fn (Document $record): bool => static::userOfficeMatches($record)
                 && $record->status === DocumentStatus::InRouting
                 && auth()->user()->can('Forward:Document')
-                && static::routeAllows($record, forApproval: false))
+                // A document with a configured Route is walked end-to-end by
+                // Submit for Approval instead of manual office-to-office
+                // forwarding — see submitForApproval() below.
+                && ! $record->route_id)
             ->schema([
                 Select::make('to_office_id')
                     ->label('Forward to Office')
-                    ->options(fn (Document $record) => static::officeOptions($record))
-                    ->default(fn (Document $record) => static::routeExpectedOfficeId($record))
+                    ->options(fn (Document $record) => Office::query()
+                        ->where('is_active', true)
+                        ->where('id', '!=', $record->current_office_id)
+                        ->pluck('name', 'id'))
                     ->required()
                     ->searchable(),
                 Textarea::make('remarks')->label('Remarks')->maxLength(1000),
@@ -102,21 +106,33 @@ class DocumentRoutingActions
             ->label('Submit for Approval')
             ->icon('heroicon-o-paper-airplane')
             ->color('warning')
+            ->requiresConfirmation(fn (Document $record): bool => (bool) $record->route_id)
+            ->modalDescription(fn (Document $record): ?string => $record->route_id
+                ? "This will walk the document through the rest of its configured route automatically, ending \"For Approval\" at the route's final office."
+                : null)
             ->visible(fn (Document $record): bool => static::userOfficeMatches($record)
                 && $record->status === DocumentStatus::InRouting
-                && auth()->user()->can('SubmitForApproval:Document')
-                && static::routeAllows($record, forApproval: true))
-            ->schema([
-                Select::make('to_office_id')
-                    ->label('Approving Office')
-                    ->options(fn (Document $record) => static::officeOptions($record))
-                    ->default(fn (Document $record) => static::routeExpectedOfficeId($record))
-                    ->required()
-                    ->searchable(),
-                Textarea::make('remarks')->label('Remarks')->maxLength(1000),
-            ])
+                && auth()->user()->can('SubmitForApproval:Document'))
+            ->schema(fn (Document $record) => $record->route_id
+                ? [Textarea::make('remarks')->label('Remarks')->maxLength(1000)]
+                : [
+                    Select::make('to_office_id')
+                        ->label('Approving Office')
+                        ->options(fn (Document $record) => Office::query()
+                            ->where('is_active', true)
+                            ->where('id', '!=', $record->current_office_id)
+                            ->pluck('name', 'id'))
+                        ->required()
+                        ->searchable(),
+                    Textarea::make('remarks')->label('Remarks')->maxLength(1000),
+                ])
             ->action(function (Document $record, array $data): void {
-                DocumentRoutingService::submitForApproval($record, auth()->user(), (int) $data['to_office_id'], $data['remarks'] ?? null);
+                if ($record->route_id) {
+                    DocumentRoutingService::submitForApprovalThroughRoute($record, auth()->user(), $data['remarks'] ?? null);
+                } else {
+                    DocumentRoutingService::submitForApproval($record, auth()->user(), (int) $data['to_office_id'], $data['remarks'] ?? null);
+                }
+
                 $record->refresh();
 
                 Notification::make()->title('Document submitted for approval')->success()->send();
@@ -193,73 +209,5 @@ class DocumentRoutingActions
         $user = auth()->user();
 
         return $user->hasRole('super_admin') || $record->current_office_id === $user->office_id;
-    }
-
-    /**
-     * The active Route configured for this document's type, if any. A
-     * document type with no active Route (or an empty one) is unconstrained
-     * — every helper below falls back to the original free-choice behavior
-     * in that case.
-     */
-    private static function activeRoute(Document $record): ?Route
-    {
-        return Route::query()
-            ->where('document_type_id', $record->document_type_id)
-            ->where('is_active', true)
-            ->with('steps.office')
-            ->first();
-    }
-
-    private static function routeExpectedOfficeId(Document $record): ?int
-    {
-        $route = static::activeRoute($record);
-
-        if (! $route || $route->steps->isEmpty()) {
-            return null;
-        }
-
-        return $route->nextOfficeIdAfter($record->current_office_id);
-    }
-
-    /**
-     * Whether $forApproval (submit-for-approval vs forward) is the
-     * transition the configured route expects next, mirroring
-     * DocumentRoutingService::assertMatchesConfiguredRoute() so the UI only
-     * offers the action that would actually succeed.
-     */
-    private static function routeAllows(Document $record, bool $forApproval): bool
-    {
-        $route = static::activeRoute($record);
-
-        if (! $route || $route->steps->isEmpty()) {
-            return true;
-        }
-
-        $expectedOfficeId = $route->nextOfficeIdAfter($record->current_office_id);
-
-        if ($expectedOfficeId === null) {
-            return true;
-        }
-
-        return $route->isFinalStepOffice($expectedOfficeId) === $forApproval;
-    }
-
-    /**
-     * Office choices for the forward/submit-for-approval Select: locked to
-     * the single route-expected office when a route is configured, or the
-     * original full list of other active offices when it isn't.
-     */
-    private static function officeOptions(Document $record)
-    {
-        $expectedOfficeId = static::routeExpectedOfficeId($record);
-
-        if ($expectedOfficeId !== null) {
-            return Office::query()->whereKey($expectedOfficeId)->pluck('name', 'id');
-        }
-
-        return Office::query()
-            ->where('is_active', true)
-            ->where('id', '!=', $record->current_office_id)
-            ->pluck('name', 'id');
     }
 }

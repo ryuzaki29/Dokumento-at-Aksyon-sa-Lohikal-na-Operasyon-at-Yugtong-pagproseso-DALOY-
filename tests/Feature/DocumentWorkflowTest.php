@@ -8,6 +8,7 @@ use App\Filament\Resources\Documents\DocumentResource;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Office;
+use App\Models\Route;
 use App\Models\User;
 use App\Services\DocumentRoutingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -110,6 +111,79 @@ class DocumentWorkflowTest extends TestCase
 
         $this->assertSame(
             [RouteActionType::Received, RouteActionType::Forwarded, RouteActionType::Approved, RouteActionType::Completed],
+            $document->routeActions()->pluck('action')->all(),
+        );
+    }
+
+    /**
+     * A document with a configured Route is walked through every remaining
+     * step by a single submitForApprovalThroughRoute() call, instead of
+     * Staff manually forwarding office-to-office — each hop still gets its
+     * own RouteAction, so the audit trail reads the same either way.
+     */
+    public function test_submit_for_approval_walks_the_configured_route_automatically(): void
+    {
+        $document = $this->registerDocument();
+
+        $route = Route::create(['code' => 'TEST-ROUTE', 'is_active' => true]);
+        $route->steps()->createMany([
+            ['office_id' => $this->originatingOffice->id, 'sequence' => 1],
+            ['office_id' => $this->processingOffice->id, 'sequence' => 2],
+            ['office_id' => $this->approvingOffice->id, 'sequence' => 3],
+        ]);
+        $document->update(['route_id' => $route->id]);
+
+        $this->staff->update(['office_id' => $this->originatingOffice->id]);
+        DocumentRoutingService::receive($document, $this->staff->fresh());
+
+        DocumentRoutingService::submitForApprovalThroughRoute($document, $this->staff->fresh(), 'Ready for approval.');
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::ForApproval, $document->status);
+        $this->assertSame($this->approvingOffice->id, $document->current_office_id);
+
+        $this->assertSame(
+            [RouteActionType::Received, RouteActionType::Forwarded, RouteActionType::Forwarded],
+            $document->routeActions()->pluck('action')->all(),
+        );
+
+        $hops = $document->routeActions()->where('action', RouteActionType::Forwarded)->orderBy('acted_at')->get();
+        $this->assertSame($this->originatingOffice->id, $hops[0]->from_office_id);
+        $this->assertSame($this->processingOffice->id, $hops[0]->to_office_id);
+        $this->assertNull($hops[0]->remarks);
+        $this->assertSame($this->processingOffice->id, $hops[1]->from_office_id);
+        $this->assertSame($this->approvingOffice->id, $hops[1]->to_office_id);
+        $this->assertSame('Ready for approval.', $hops[1]->remarks);
+    }
+
+    /**
+     * Regression: a document already sitting at its route's only (or last)
+     * configured step has zero "remaining" steps to walk. That must still
+     * succeed — flipping straight to ForApproval in place — not be treated
+     * as an error. It previously threw a ValidationException keyed to a
+     * form field ('route_id') that doesn't exist in the action's modal
+     * (only 'remarks' does), which Filament silently swallowed: the button
+     * visibly did nothing.
+     */
+    public function test_submit_for_approval_succeeds_when_already_at_the_routes_only_step(): void
+    {
+        $document = $this->registerDocument();
+
+        $route = Route::create(['code' => 'ONE-STEP', 'is_active' => true]);
+        $route->steps()->create(['office_id' => $this->originatingOffice->id, 'sequence' => 1]);
+        $document->update(['route_id' => $route->id]);
+
+        $this->staff->update(['office_id' => $this->originatingOffice->id]);
+        DocumentRoutingService::receive($document, $this->staff->fresh());
+
+        DocumentRoutingService::submitForApprovalThroughRoute($document, $this->staff->fresh(), 'Ready.');
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::ForApproval, $document->status);
+        $this->assertSame($this->originatingOffice->id, $document->current_office_id);
+
+        $this->assertSame(
+            [RouteActionType::Received, RouteActionType::Forwarded],
             $document->routeActions()->pluck('action')->all(),
         );
     }

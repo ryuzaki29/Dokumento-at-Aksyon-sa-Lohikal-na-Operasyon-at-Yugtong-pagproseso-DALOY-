@@ -23,6 +23,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Livewire\Mechanisms\PersistentMiddleware\PersistentMiddleware;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
@@ -268,6 +269,136 @@ class AdminPanelSmokeTest extends TestCase
         $this->assertSame($office->id, $document->originating_office_id);
         $this->assertSame($office->id, $document->current_office_id);
         $this->assertSame('Test description', $document->description);
+    }
+
+    #[RunInSeparateProcess]
+    public function test_admin_can_register_a_document_with_a_reference_route(): void
+    {
+        $documentType = DocumentType::factory()->create();
+        $office = Office::factory()->create();
+        $this->admin->update(['office_id' => $office->id]);
+        $this->actingAs($this->admin);
+
+        $route = Route::create(['code' => 'REC-LEG', 'is_active' => true]);
+        $route->steps()->create(['office_id' => $office->id, 'sequence' => 1]);
+
+        Livewire::test(CreateDocument::class)
+            ->fillForm([
+                'document_type_id' => $documentType->id,
+                'route_id' => $route->id,
+                'subject' => 'Routed subject',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $document = Document::where('subject', 'Routed subject')->firstOrFail();
+
+        $this->assertSame($route->id, $document->route_id);
+    }
+
+    #[RunInSeparateProcess]
+    public function test_document_view_shows_the_process_flow_with_the_current_step_highlighted(): void
+    {
+        $officeA = Office::factory()->create(['name' => 'Records Section']);
+        $officeB = Office::factory()->create(['name' => 'Legal Office']);
+        $documentType = DocumentType::factory()->create();
+
+        $this->actingAs($this->admin);
+
+        $route = Route::create(['code' => 'REC-LEG', 'is_active' => true]);
+        $route->steps()->createMany([
+            ['office_id' => $officeA->id, 'sequence' => 1],
+            ['office_id' => $officeB->id, 'sequence' => 2],
+        ]);
+
+        $document = Document::factory()->create([
+            'document_type_id' => $documentType->id,
+            'route_id' => $route->id,
+            'originating_office_id' => $officeA->id,
+            'current_office_id' => $officeB->id,
+            'status' => DocumentStatus::InRouting,
+        ]);
+
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
+            ->assertSeeHtml('Legal Office')
+            ->assertSeeHtml('Current');
+    }
+
+    #[RunInSeparateProcess]
+    public function test_a_routed_document_hides_forward_and_submit_for_approval_walks_the_route(): void
+    {
+        $originOffice = Office::factory()->create();
+        $midOffice = Office::factory()->create();
+        $approvingOffice = Office::factory()->create();
+        $documentType = DocumentType::factory()->create();
+
+        $this->admin->update(['office_id' => $originOffice->id]);
+        $this->actingAs($this->admin);
+
+        $route = Route::create(['code' => 'ORIGIN-MID-APPROVE', 'is_active' => true]);
+        $route->steps()->createMany([
+            ['office_id' => $originOffice->id, 'sequence' => 1],
+            ['office_id' => $midOffice->id, 'sequence' => 2],
+            ['office_id' => $approvingOffice->id, 'sequence' => 3],
+        ]);
+
+        $document = Document::factory()->create([
+            'document_type_id' => $documentType->id,
+            'route_id' => $route->id,
+            'originating_office_id' => $originOffice->id,
+            'current_office_id' => $originOffice->id,
+            'status' => DocumentStatus::InRouting,
+        ]);
+
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
+            ->assertActionHidden('forward')
+            ->assertActionVisible('submitForApproval')
+            ->callAction('submitForApproval', data: ['remarks' => 'Following the configured route.'])
+            ->assertHasNoActionErrors();
+
+        $document->refresh();
+        $this->assertSame(DocumentStatus::ForApproval, $document->status);
+        $this->assertSame($approvingOffice->id, $document->current_office_id);
+        $this->assertSame(2, $document->routeActions()->count());
+    }
+
+    /**
+     * Regression: FileUpload saves to config('filament.default_filesystem_
+     * disk') — 'local' in this app, whose config has no 'visibility' =>
+     * 'public'. A plain Storage::url() for that disk 404s/403s (Laravel's
+     * storage.local route requires either public visibility or a valid
+     * signature — see Illuminate\Filesystem\ServeFile), so the attachment
+     * link must use a signed temporaryUrl() instead.
+     */
+    #[RunInSeparateProcess]
+    public function test_document_view_shows_a_working_attachment_link(): void
+    {
+        $disk = config('filament.default_filesystem_disk', 'public');
+        $path = 'documents/smoke-test-attachment.txt';
+        Storage::disk($disk)->put($path, 'attachment contents');
+
+        $documentType = DocumentType::factory()->create();
+        $office = Office::factory()->create();
+
+        $document = Document::factory()->create([
+            'document_type_id' => $documentType->id,
+            'file_path' => $path,
+            'originating_office_id' => $office->id,
+            'current_office_id' => $office->id,
+        ]);
+
+        $this->actingAs($this->admin);
+
+        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
+            ->assertSeeHtml('smoke-test-attachment.txt');
+
+        $url = Storage::disk($disk)->temporaryUrl($path, now()->addMinutes(30));
+
+        try {
+            $this->get($url)->assertOk();
+        } finally {
+            Storage::disk($disk)->delete($path);
+        }
     }
 
     #[RunInSeparateProcess]
@@ -664,65 +795,6 @@ class AdminPanelSmokeTest extends TestCase
     }
 
     #[RunInSeparateProcess]
-    public function test_route_configuration_constrains_the_forward_and_submit_for_approval_actions(): void
-    {
-        $originOffice = Office::factory()->create();
-        $budgetOffice = Office::factory()->create();
-        $approvingOffice = Office::factory()->create();
-        $decoyOffice = Office::factory()->create();
-        $documentType = DocumentType::factory()->create();
-
-        $this->admin->update(['office_id' => $originOffice->id]);
-        $this->actingAs($this->admin);
-
-        $route = Route::create(['document_type_id' => $documentType->id, 'is_active' => true]);
-        $route->steps()->createMany([
-            ['office_id' => $budgetOffice->id, 'sequence' => 1],
-            ['office_id' => $approvingOffice->id, 'sequence' => 2],
-        ]);
-
-        $document = Document::factory()->create([
-            'document_type_id' => $documentType->id,
-            'originating_office_id' => $originOffice->id,
-            'current_office_id' => $originOffice->id,
-            'status' => DocumentStatus::InRouting,
-        ]);
-
-        // A form value outside the route is rejected even though it never
-        // appeared as a selectable option (a fresh component instance per
-        // attempt — Filament's testing helpers don't support re-calling the
-        // same action after a failed one on the same instance).
-        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->callAction('forward', data: ['to_office_id' => $decoyOffice->id])
-            ->assertHasActionErrors();
-
-        $this->assertSame($originOffice->id, $document->fresh()->current_office_id);
-
-        // At the start of the route: forward is offered (to Budget, the
-        // route's first step), submit-for-approval is not (Budget isn't the
-        // final step yet).
-        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertActionVisible('forward')
-            ->assertActionHidden('submitForApproval')
-            ->callAction('forward', data: ['to_office_id' => $budgetOffice->id])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame($budgetOffice->id, $document->fresh()->current_office_id);
-
-        // At Budget — the step before the last — submit-for-approval is now
-        // offered (to Legal, the route's final step), forward is not: the
-        // last step must go through approval, not another forward.
-        Livewire::test(ViewDocument::class, ['record' => $document->getRouteKey()])
-            ->assertActionHidden('forward')
-            ->assertActionVisible('submitForApproval')
-            ->callAction('submitForApproval', data: ['to_office_id' => $approvingOffice->id, 'remarks' => 'Ready.'])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame(DocumentStatus::ForApproval, $document->fresh()->status);
-        $this->assertSame($approvingOffice->id, $document->fresh()->current_office_id);
-    }
-
-    #[RunInSeparateProcess]
     public function test_admin_can_view_the_routes_list_and_create_page(): void
     {
         $this->actingAs($this->admin)->get('/admin/routes')->assertOk();
@@ -732,29 +804,35 @@ class AdminPanelSmokeTest extends TestCase
     #[RunInSeparateProcess]
     public function test_admin_can_configure_a_route_with_ordered_steps(): void
     {
-        $documentType = DocumentType::factory()->create();
         $officeA = Office::factory()->create();
         $officeB = Office::factory()->create();
+        Role::findOrCreate('processing_staff', 'web');
+        Role::findOrCreate('approver', 'web');
 
         $this->actingAs($this->admin);
 
         Livewire::test(CreateRoute::class)
             ->fillForm([
-                'document_type_id' => $documentType->id,
+                'code' => 'REC-LEG',
+                'description' => 'Records straight to Legal',
                 'is_active' => true,
                 'steps' => [
-                    ['office_id' => $officeA->id],
-                    ['office_id' => $officeB->id],
+                    ['office_id' => $officeA->id, 'roles' => ['processing_staff']],
+                    ['office_id' => $officeB->id, 'roles' => ['approver']],
                 ],
             ])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $route = Route::where('document_type_id', $documentType->id)->firstOrFail();
+        $route = Route::where('code', 'REC-LEG')->firstOrFail();
 
         $this->assertSame(
             [$officeA->id, $officeB->id],
             $route->steps()->orderBy('sequence')->pluck('office_id')->all(),
+        );
+        $this->assertSame(
+            [['processing_staff'], ['approver']],
+            $route->steps()->orderBy('sequence')->pluck('roles')->all(),
         );
     }
 }

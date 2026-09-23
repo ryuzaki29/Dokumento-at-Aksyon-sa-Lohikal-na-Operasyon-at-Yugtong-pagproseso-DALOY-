@@ -7,6 +7,7 @@ use App\Enums\RouteActionType;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Office;
+use App\Models\Route;
 use App\Models\RouteAction;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -35,10 +36,11 @@ class DocumentDemoSeeder extends Seeder
 
         $records = Office::where('code', 'REC')->firstOrFail();
         $legal = Office::where('code', 'LEG')->firstOrFail();
+        $route = Route::where('code', 'REC-BUD-LEG')->first();
 
         $this->completedScenario($memo, $records, $legal, $originator, $staff, $approver);
         $this->returnedAndResubmittedScenario($request, $records, $legal, $originator, $staff, $approver);
-        $this->midFlowScenario($endorsement, $records, $originator, $staff);
+        $this->midFlowScenario($endorsement, $records, $originator, $staff, $route);
     }
 
     private function completedScenario(DocumentType $type, Office $records, Office $legal, User $originator, User $staff, User $approver): void
@@ -102,13 +104,14 @@ class DocumentDemoSeeder extends Seeder
         $this->log($document, $legal->id, $legal->id, RouteActionType::Completed, $approver, $start->clone()->addDays(2)->addSecond());
     }
 
-    private function midFlowScenario(DocumentType $type, Office $records, User $originator, User $staff): void
+    private function midFlowScenario(DocumentType $type, Office $records, User $originator, User $staff, ?Route $route): void
     {
         $start = now()->subHours(4);
 
         $document = Document::create([
             'reference_no' => Document::generateReferenceNo(),
             'document_type_id' => $type->id,
+            'route_id' => $route?->id,
             'subject' => 'Endorsement of new records retention schedule',
             'originating_office_id' => $records->id,
             'current_office_id' => $records->id,

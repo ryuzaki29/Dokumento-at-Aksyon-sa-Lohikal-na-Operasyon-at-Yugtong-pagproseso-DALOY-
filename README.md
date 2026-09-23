@@ -46,7 +46,7 @@ Seeded demo documents cover a completed transaction, a returned-and-resubmitted 
 
 `TeamSeeder` also seeds the project team's own accounts (all `super_admin`, same `password`) and the UP System + its 8 constituent universities as `Institution` records — see `database/seeders/TeamSeeder.php`.
 
-`RouteSeeder` configures one demo `Route` (Master Data → Routes): Endorsement documents must go Budget Office → Legal / Approving Office, instead of any office. The seeded mid-flow Endorsement document exercises this live — Staff can only forward it to Budget, then only submit it for approval at Legal. Budget has no dedicated demo login, so that hop needs a `super_admin` account (any of the ones above). Document types with no configured route (or an inactive one) keep the original free-choice routing.
+`RouteSeeder` seeds one demo `Route` (Master Data → Routes): a named reference path, `REC-BUD-LEG` (Records → Budget → Legal). It's documentation only — a `code` + `description` + ordered list of offices for reference/lookup, not linked to any `DocumentType` and not enforced anywhere. Routing a document is always free-choice, regardless of what's configured here.
 
 ## Tests
 

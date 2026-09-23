@@ -13,16 +13,21 @@ class RouteInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('documentType.name')
-                    ->label('Document Type'),
+                TextEntry::make('code'),
+                TextEntry::make('description')->placeholder('—'),
                 IconEntry::make('is_active')->boolean(),
                 RepeatableEntry::make('steps')
                     ->label('Route Steps')
                     ->schema([
                         TextEntry::make('sequence'),
                         TextEntry::make('office.name')->label('Office'),
+                        TextEntry::make('office.institution.name')->label('Institution')->placeholder('—'),
+                        TextEntry::make('roles')
+                            ->label('Expected Role(s)')
+                            ->badge()
+                            ->placeholder('—'),
                     ])
-                    ->columns(2),
+                    ->columns(4),
                 TextEntry::make('creator.name')->label('Created by'),
                 TextEntry::make('created_at')->dateTime(),
             ]);

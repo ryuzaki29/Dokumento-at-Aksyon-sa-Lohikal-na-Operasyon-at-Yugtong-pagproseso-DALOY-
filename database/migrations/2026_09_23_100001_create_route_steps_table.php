@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('route_id')->constrained('routes')->cascadeOnDelete();
             $table->foreignId('office_id')->constrained('offices');
             $table->unsignedSmallInteger('sequence');
+            $table->json('roles')->nullable();
             $table->timestamps();
 
             $table->unique(['route_id', 'sequence']);

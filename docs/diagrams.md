@@ -45,9 +45,9 @@ erDiagram
     DOCUMENTS ||--o{ ROUTE_ACTIONS : "has history"
     USERS ||--o{ ROUTE_ACTIONS : "acts on"
     USERS ||--o{ DOCUMENTS : "creates"
-    DOCUMENT_TYPES ||--o| ROUTES : "configures"
     ROUTES ||--o{ ROUTE_STEPS : "orders"
     OFFICES ||--o{ ROUTE_STEPS : "visited at"
+    ROUTES ||--o{ DOCUMENTS : "suggested for (optional)"
 
     INSTITUTIONS {
         bigint id PK
@@ -93,6 +93,7 @@ erDiagram
         bigint id PK
         string reference_no
         bigint document_type_id FK
+        bigint route_id FK "nullable, reference only"
         string subject
         bigint originating_office_id FK
         bigint current_office_id FK
@@ -116,7 +117,8 @@ erDiagram
 
     ROUTES {
         bigint id PK
-        bigint document_type_id FK "unique — one route per type"
+        string code
+        string description
         boolean is_active
         bigint created_by FK
         bigint updated_by FK
@@ -128,12 +130,13 @@ erDiagram
         bigint route_id FK
         bigint office_id FK
         smallint sequence
+        json roles "reference label, e.g. [\"processing_staff\"]"
     }
 ```
 
 `institution_id` on `OFFICES` and `USERS` is nullable (`nullOnDelete`) — an office/user can exist without an institution assigned. `DOCUMENT_TYPES` deliberately has **no** institution/office FK: document types are shared/global across the whole app, not scoped per institution.
 
-`ROUTES` is an optional, one-to-one-or-none configuration per `DOCUMENT_TYPES` row (unique FK): a document type with no `ROUTES` row, or one with `is_active = false`, routes freely to any office, exactly as before this was added. When active, `ROUTE_STEPS` (ordered by `sequence`) defines the required path — every step but the last is a forward-only stop; the last step is always where the document is submitted for approval. Enforced in `DocumentRoutingService::assertMatchesConfiguredRoute()`, independent of the Filament UI, the same way the one-current-holder rule is.
+`ROUTES` is a catalog of named, ordered office paths (`code` + `description`, with `ROUTE_STEPS` giving each one's office sequence and, optionally, the Shield role(s) expected to handle that step — `roles` is a documentation label only, never checked). A `DOCUMENTS` row may optionally point at one via `route_id`, set by its creator at registration. That link drives the "Process Flow" preview on the Create/Edit/View pages, and — once the document is routing — its Submit for Approval action: `DocumentRoutingService::submitForApprovalThroughRoute()` walks every remaining configured step in one call instead of Staff forwarding office-to-office by hand, and the manual Forward action is hidden for these documents. A `DOCUMENTS` row with no `route_id` (or an inactive/stepless route) is unaffected — Forward and a manual Submit-for-Approval office picker both work exactly as they did before this feature existed.
 
 Roles/permissions (`document_originator`, `processing_staff`, `approver`, `super_admin`) are managed by Filament Shield's own `roles`, `permissions`, `model_has_roles` tables and are not modeled as a custom entity.
 

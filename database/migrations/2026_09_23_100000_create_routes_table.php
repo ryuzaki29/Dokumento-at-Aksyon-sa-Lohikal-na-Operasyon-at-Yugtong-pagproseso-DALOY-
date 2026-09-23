@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('routes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('document_type_id')->unique()->constrained('document_types');
+            $table->string('code', 50)->unique();
+            $table->string('description', 255)->nullable();
             $table->boolean('is_active')->default(true);
             $table->auditColumns();
             $table->timestamps();

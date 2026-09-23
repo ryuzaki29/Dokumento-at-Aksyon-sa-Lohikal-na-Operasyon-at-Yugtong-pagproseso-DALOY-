@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\DocumentType;
 use App\Models\Route;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -15,7 +14,8 @@ class RouteFactory extends Factory
     public function definition(): array
     {
         return [
-            'document_type_id' => DocumentType::factory(),
+            'code' => strtoupper(fake()->unique()->lexify('RT-???')),
+            'description' => fake()->sentence(),
             'is_active' => true,
             'created_by' => User::factory(),
         ];

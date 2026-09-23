@@ -27,7 +27,7 @@ class Document extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'document_type_id', 'subject', 'description', 'originating_office_id', 'file_path', 'status', 'current_office_id',
+        'document_type_id', 'route_id', 'subject', 'description', 'originating_office_id', 'file_path', 'status', 'current_office_id',
     ];
 
     protected function casts(): array
@@ -64,6 +64,16 @@ class Document extends Model
     public function documentType(): BelongsTo
     {
         return $this->belongsTo(DocumentType::class);
+    }
+
+    /**
+     * Reference only — a suggested path picked for guidance when registering
+     * this document. Not read by DocumentRoutingService; actual routing is
+     * always free-choice regardless of what's selected here.
+     */
+    public function route(): BelongsTo
+    {
+        return $this->belongsTo(Route::class);
     }
 
     public function originatingOffice(): BelongsTo
