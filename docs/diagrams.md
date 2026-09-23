@@ -34,6 +34,8 @@ Matches `database/migrations/2026_09_22_1000*` exactly.
 
 ```mermaid
 erDiagram
+    INSTITUTIONS ||--o{ OFFICES : "owns"
+    INSTITUTIONS ||--o{ USERS : "employs"
     OFFICES ||--o{ USERS : "staffs"
     OFFICES ||--o{ DOCUMENTS : "originates"
     OFFICES ||--o{ DOCUMENTS : "currently holds"
@@ -43,9 +45,23 @@ erDiagram
     DOCUMENTS ||--o{ ROUTE_ACTIONS : "has history"
     USERS ||--o{ ROUTE_ACTIONS : "acts on"
     USERS ||--o{ DOCUMENTS : "creates"
+    DOCUMENT_TYPES ||--o| ROUTES : "configures"
+    ROUTES ||--o{ ROUTE_STEPS : "orders"
+    OFFICES ||--o{ ROUTE_STEPS : "visited at"
+
+    INSTITUTIONS {
+        bigint id PK
+        string code
+        string name
+        boolean is_active
+        bigint created_by FK
+        bigint updated_by FK
+        timestamp deleted_at
+    }
 
     OFFICES {
         bigint id PK
+        bigint institution_id FK
         string code
         string name
         boolean is_active
@@ -57,6 +73,7 @@ erDiagram
     USERS {
         bigint id PK
         bigint office_id FK
+        bigint institution_id FK
         string name
         string email
         string password
@@ -96,7 +113,27 @@ erDiagram
         bigint acted_by FK
         timestamp acted_at
     }
+
+    ROUTES {
+        bigint id PK
+        bigint document_type_id FK "unique — one route per type"
+        boolean is_active
+        bigint created_by FK
+        bigint updated_by FK
+        timestamp deleted_at
+    }
+
+    ROUTE_STEPS {
+        bigint id PK
+        bigint route_id FK
+        bigint office_id FK
+        smallint sequence
+    }
 ```
+
+`institution_id` on `OFFICES` and `USERS` is nullable (`nullOnDelete`) — an office/user can exist without an institution assigned. `DOCUMENT_TYPES` deliberately has **no** institution/office FK: document types are shared/global across the whole app, not scoped per institution.
+
+`ROUTES` is an optional, one-to-one-or-none configuration per `DOCUMENT_TYPES` row (unique FK): a document type with no `ROUTES` row, or one with `is_active = false`, routes freely to any office, exactly as before this was added. When active, `ROUTE_STEPS` (ordered by `sequence`) defines the required path — every step but the last is a forward-only stop; the last step is always where the document is submitted for approval. Enforced in `DocumentRoutingService::assertMatchesConfiguredRoute()`, independent of the Filament UI, the same way the one-current-holder rule is.
 
 Roles/permissions (`document_originator`, `processing_staff`, `approver`, `super_admin`) are managed by Filament Shield's own `roles`, `permissions`, `model_has_roles` tables and are not modeled as a custom entity.
 

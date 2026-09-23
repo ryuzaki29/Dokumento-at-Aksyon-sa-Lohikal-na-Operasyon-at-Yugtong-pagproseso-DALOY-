@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DocumentStatus;
 use App\Enums\RouteActionType;
 use App\Models\Document;
+use App\Models\Route;
 use App\Models\RouteAction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -192,6 +193,8 @@ class DocumentRoutingService
 
             abort_if($toOfficeId === $fromOfficeId, 422, 'Document is already at that office.');
 
+            static::assertMatchesConfiguredRoute($document, $toOfficeId, $resultingStatus);
+
             $document->update([
                 'status' => $resultingStatus,
                 'current_office_id' => $toOfficeId,
@@ -209,6 +212,55 @@ class DocumentRoutingService
 
             return $document;
         });
+    }
+
+    /**
+     * When the document's type has an active, configured Route, forward()
+     * and submitForApproval() may only move it to the exact next office the
+     * route specifies, and only via the action (forward vs submit-for-
+     * approval) matching whether that next step is the route's last one. A
+     * document type with no active Route (or an empty one) keeps the
+     * original free-choice behavior untouched.
+     */
+    private static function assertMatchesConfiguredRoute(Document $document, int $toOfficeId, DocumentStatus $resultingStatus): void
+    {
+        $route = Route::query()
+            ->where('document_type_id', $document->document_type_id)
+            ->where('is_active', true)
+            ->with('steps.office')
+            ->first();
+
+        if (! $route || $route->steps->isEmpty()) {
+            return;
+        }
+
+        $expectedOfficeId = $route->nextOfficeIdAfter($document->current_office_id);
+
+        if ($expectedOfficeId === null) {
+            return;
+        }
+
+        if ($toOfficeId !== $expectedOfficeId) {
+            $expectedOfficeName = $route->steps->firstWhere('office_id', $expectedOfficeId)?->office?->name;
+
+            throw ValidationException::withMessages([
+                'to_office_id' => "This document type's configured route requires it to go to {$expectedOfficeName} next.",
+            ]);
+        }
+
+        $isFinalStep = $route->isFinalStepOffice($expectedOfficeId);
+
+        if ($isFinalStep && $resultingStatus !== DocumentStatus::ForApproval) {
+            throw ValidationException::withMessages([
+                'to_office_id' => 'The configured route requires this step to be submitted for approval, not forwarded.',
+            ]);
+        }
+
+        if (! $isFinalStep && $resultingStatus === DocumentStatus::ForApproval) {
+            throw ValidationException::withMessages([
+                'to_office_id' => 'The configured route has more offices before this document can be submitted for approval.',
+            ]);
+        }
     }
 
     /**

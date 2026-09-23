@@ -26,19 +26,19 @@ Status as of 2026-09-22: the **required MVP is complete** (all 13 demo requireme
 
 These fell behind after the Institution → Office hierarchy and Users module were added on top of the required MVP.
 
-- [ ] Update `docs/diagrams.md` ERD to add the `INSTITUTIONS` table and its FKs (`offices.institution_id`, `users.institution_id`). Document Type intentionally has **no** institution/office FK — it's shared/global across the whole app — _Owner: ____
-- [ ] Add a short addendum to `PDCA.md` (or a new "Extensions" section) covering the Institution → Office hierarchy, the Users management module, the multi-role "switch role" feature (topbar menu → `/admin/switch-role`, narrows a multi-role account to one role's permissions at a time), and the new Draft status (see below), since the current PDCA only describes the original required-scope build — _Owner: ____
-- [ ] `DocumentStatus` now has 6 cases (Draft + the spec's 5), one past the spec's stated "4–5 transaction statuses" target. Draft is pre-workflow (private to its creator, no `current_office_id`, not counted in `DocumentStatsOverview`) rather than a routing state, so it doesn't change the required Registered→...→Completed flow — worth a one-line justification in the PDCA addendum in case a judge counts literally — _Owner: ____
-- [ ] Replace `README.md` (currently the stock Laravel template) with project-specific setup steps: `install.sh` usage, demo login credentials per role, and a link to `PDCA.md` / `docs/diagrams.md` — _Owner: ____
+- [x] Update `docs/diagrams.md` ERD to add the `INSTITUTIONS` table and its FKs (`offices.institution_id`, `users.institution_id`). Document Type intentionally has **no** institution/office FK — it's shared/global across the whole app
+- [x] Add a short addendum to `PDCA.md` ("Extensions (post-MVP)" section) covering the Institution → Office hierarchy, the Users management module, the multi-role "switch role" feature, and the new Draft status
+- [x] `DocumentStatus`'s 6th case (`Draft`) justified in the PDCA addendum — pre-workflow, doesn't count against the spec's "4–5 transaction statuses" target
+- [x] Replace `README.md` (was the stock Laravel template) with project-specific setup steps: `install.sh` usage, demo login credentials per role, and links to `PDCA.md` / `docs/diagrams.md`
 
 ## Outstanding — Demo Data
 
-- [ ] Seed at least one `Institution` and link it to the existing seeded offices/users (`database/seeders/OfficeSeeder.php`, `DemoUserSeeder.php`, or a new `InstitutionSeeder.php` called from `DatabaseSeeder.php`), so the new hierarchy is visible in the live demo instead of only reachable by manually creating records — _Owner: ____
+- [x] Seed at least one `Institution` and link it to the existing seeded offices/users (new `database/seeders/InstitutionSeeder.php`, called from `DatabaseSeeder.php` after `OfficeSeeder`) — links all 4 seeded offices and the 3 office-bound demo users to a "Main Campus" institution
 
 ## Pre-Submission Checklist
 
-- [ ] Full test suite green: `docker compose exec php php artisan test`
-- [ ] Pint clean on touched files: `docker compose exec php vendor/bin/pint --test`
+- [x] Full test suite green: `docker compose exec php php artisan test` (34 passed, 163 assertions — 2026-09-23)
+- [x] Pint clean on touched files: `docker compose exec php vendor/bin/pint --test` (10 pre-existing style issues found and fixed, 113 files clean — 2026-09-23)
 - [ ] Re-read `08_document_routing_balanced.md` "Scope Control" section — confirm no optional/bonus items (SSO, email, QR, API, etc.) were accidentally started before core MVP polish is done
 - [ ] Dry-run the required demo scenario end-to-end: register → receive → forward → submit for approval → return → resubmit → complete, and show the "two simultaneous holders" rule being rejected
 - [ ] Confirm PDCA "30–60 second" talking point is rehearsed for the final demo

@@ -18,7 +18,10 @@ class DatabaseSeeder extends Seeder
             ShieldRoleSeeder::class,
             DemoUserSeeder::class,
             OfficeSeeder::class,
+            InstitutionSeeder::class,
+            TeamSeeder::class,
             DocumentTypeSeeder::class,
+            RouteSeeder::class,
             DocumentDemoSeeder::class,
         ]);
     }

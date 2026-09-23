@@ -1,59 +1,63 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Document Routing and Approval
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel + FilamentPHP admin panel for routing office documents (memos, requests, endorsements) through a register → route → approve/return → complete workflow, with a full timestamped history and one enforced "current holder" per document. Built as Case Study 8 — see [08_document_routing_balanced.md](08_document_routing_balanced.md) for the spec, [PDCA.md](PDCA.md) for the design reflection, and [docs/diagrams.md](docs/diagrams.md) for the four required diagrams.
 
-## About Laravel
+## Setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+The project ships as a self-contained Docker stack (PHP-FPM, nginx, PostgreSQL, Redis, Vite).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+```bash
+./install.sh
+```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+This writes `.docker/`, `docker-compose.yml`, and env keys (skipping anything already in place, unless run with `--force`), then runs `docker compose up -d --build`. Every file it would overwrite is backed up first. See `./install.sh --help` for `--no-up` / `--force`.
 
-## Learning Laravel
+A one-shot `setup` container runs before `php`/`nginx` come up and does everything needed to get a working panel: `php artisan migrate` → `php artisan shield:generate --all --panel=admin` → `php artisan db:seed`, in that order (`.docker/php/setup.sh`). Nothing further to run manually.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+The app is served at **http://localhost/admin**.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Resetting the database
 
-## Laravel Sponsors
+Don't run `php artisan migrate:fresh` by hand — it wipes the `permissions` table but doesn't regenerate it, which leaves every role (including `super_admin`) with zero permissions and hides every module in the panel. To reset cleanly, re-run the `setup` service so `shield:generate` runs again before the seeder:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```bash
+docker compose up setup
+```
 
-### Premium Partners
+If permissions ever do end up empty (e.g. `migrate:fresh` was run directly), recover with:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+docker compose exec php php artisan shield:generate --all --panel=admin --no-interaction
+docker compose exec php php artisan db:seed --no-interaction
+```
 
-## Contributing
+## Demo logins
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Seeded by `DemoUserSeeder` — password is `password` for all (override via `DEMO_USER_PASSWORD` in `.env`):
 
-## Code of Conduct
+| Role | Email |
+| --- | --- |
+| Super Admin | `admin@example.com` |
+| Document Originator | `originator@example.com` |
+| Processing Staff | `staff@example.com` |
+| Approver | `approver@example.com` |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Seeded demo documents cover a completed transaction, a returned-and-resubmitted one, and one mid-flow — enough to exercise the dashboard, routing history, and routing-log report without creating anything by hand.
 
-## Security Vulnerabilities
+`TeamSeeder` also seeds the project team's own accounts (all `super_admin`, same `password`) and the UP System + its 8 constituent universities as `Institution` records — see `database/seeders/TeamSeeder.php`.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+`RouteSeeder` configures one demo `Route` (Master Data → Routes): Endorsement documents must go Budget Office → Legal / Approving Office, instead of any office. The seeded mid-flow Endorsement document exercises this live — Staff can only forward it to Budget, then only submit it for approval at Legal. Budget has no dedicated demo login, so that hop needs a `super_admin` account (any of the ones above). Document types with no configured route (or an inactive one) keep the original free-choice routing.
 
-## License
+## Tests
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+docker compose exec php php artisan test
+docker compose exec php vendor/bin/pint --test
+```
+
+## Docs
+
+- [08_document_routing_balanced.md](08_document_routing_balanced.md) — case study spec and scope control
+- [PDCA.md](PDCA.md) — Plan/Do/Check/Act reflection, including the post-MVP Institution/Users/switch-role extensions
+- [docs/diagrams.md](docs/diagrams.md) — System Context, ERD, Process Flow, and DFD Level 0 diagrams
+- [WORKLIST.md](WORKLIST.md) — remaining pre-submission tasks

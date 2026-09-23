@@ -12,19 +12,19 @@ To keep all nine team assignments as fair as possible, every case study follows 
 
 Each team is expected to implement approximately the same amount of work:
 
-- **3 primary user roles**
-- **1 master-data module**
-- **1 main transaction module**
-- **1 approval/review workflow**
-- **4–5 transaction statuses**
-- **1 non-trivial business rule**
-- **1 dashboard**
-- **1 report/output**
-- **1 basic audit/history view**
-- **4 required diagrams**
-- **1 short PDCA reflection**
-- **Seeded demonstration data**
-- **One complete end-to-end demo scenario**
+- **3 primary user roles** - (Done)
+- **1 master-data module** - (Done - Master Data Module)
+- **1 main transaction module** (Document Module)
+- **1 approval/review workflow** - (Done)
+- **4–5 transaction statuses** (Done)
+- **1 non-trivial business rule** (Done)
+- **1 dashboard** (Done)
+- **1 report/output** (Done)
+- **1 basic audit/history view** (Done)
+- **4 required diagrams** (Done)
+- **1 short PDCA reflection** (Done)
+- **Seeded demonstration data** (Done)
+- **One complete end-to-end demo scenario** (Done)
 
 Teams should not add large optional modules until the core MVP is working.
 
